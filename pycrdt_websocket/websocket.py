@@ -19,6 +19,10 @@ class Websocket(Protocol):
     await websocket.send(message)
     ```
     """
+    @staticmethod
+    def exception_handler(exception: Exception, log: Logger) -> bool:
+        ...
+        return False
 
     @property
     def path(self) -> str:

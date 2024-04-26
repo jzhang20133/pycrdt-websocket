@@ -71,17 +71,26 @@ class WebsocketServer:
             self.__start_lock = Lock()
         return self.__start_lock
 
-    async def get_room(self, name: str) -> YRoom:
+    async def get_room(
+        self, name: str, 
+        exception_handler: Callable[[Exception, Logger], bool] | None
+    ) -> YRoom:
         """Get or create a room with the given name, and start it.
 
         Arguments:
             name: The room name.
+            exception_handler: A callable for handling exceptions raised in the YRoom.
+                If the exception in handled, should return `True`; otherwise, returns `False`.
 
         Returns:
             The room with the given name, or a new one if no room with that name was found.
         """
         if name not in self.rooms.keys():
-            self.rooms[name] = YRoom(ready=self.rooms_ready, log=self.log)
+            self.rooms[name] = YRoom(
+                ready=self.rooms_ready, 
+                log=self.log, 
+                exception_handler=exception_handler
+            )
         room = self.rooms[name]
         await self.start_room(room)
         return room
@@ -158,7 +167,10 @@ class WebsocketServer:
 
         try:
             async with create_task_group():
-                room = await self.get_room(websocket.path)
+                # If the websocket interface includes a customer exception handler
+                # pass it to the YRoom.
+                exception_handler = getattr(websocket, "exception_handler", None)
+                room = await self.get_room(websocket.path, exception_handler=exception_handler)
                 await self.start_room(room)
                 await room.serve(websocket)
                 if self.auto_clean_rooms and not room.clients:
@@ -236,5 +248,5 @@ class WebsocketServer:
 
 def exception_logger(exception: Exception, log: Logger) -> bool:
     """An exception handler that logs the exception and discards it."""
-    log.error("WebsocketServer exception", exc_info=exception)
+    log.error("PyCRDT WebsocketServer exception", exc_info=exception)
     return True  # the exception was handled
